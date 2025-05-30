@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Color variables */
+  --color-primary: 59, 130, 246; /* Blue */
+  --color-secondary: 139, 92, 246; /* Purple */
+  --color-accent: 245, 158, 11; /* Amber */
+  --color-success: 34, 197, 94; /* Green */
+  --color-warning: 249, 115, 22; /* Orange */
+  --color-error: 239, 68, 68; /* Red */
+  --color-background: 250, 250, 250; /* Almost white */
+  --color-foreground: 15, 23, 42; /* Slate-900 */
+}
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+    -webkit-tap-highlight-color: transparent;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+    height: 100%;
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  #root {
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium tracking-tight text-slate-900;
+    line-height: 1.2;
+  }
+  
+  p, li {
+    @apply text-slate-700;
+    line-height: 1.5;
+  }
+  
+  /* ADHD-friendly focus styles */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500;
+  }
+
+  /* Improve touch targets for mobile */
+  button, a, input, select, [role="button"] {
+    @apply touch-manipulation;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    min-height: 44px; /* Better touch targets */
+  }
+  
+  .btn-primary {
+    @apply bg-blue-500 text-white hover:bg-blue-600 focus-visible:ring-blue-500;
+  }
+  
+  .btn-secondary {
+    @apply bg-purple-500 text-white hover:bg-purple-600 focus-visible:ring-purple-500;
+  }
+  
+  .btn-outline {
+    @apply border border-slate-200 bg-transparent hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-500;
+  }
+  
+  .input {
+    @apply h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 44px; /* Better touch targets */
+  }
+  
+  .card {
+    @apply rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-all;
+  }
+
+  /* Mobile navigation menu */
+  .mobile-menu-button {
+    @apply h-12 w-12 flex items-center justify-center;
+  }
+
+  /* PWA installation prompt */
+  .install-prompt {
+    @apply fixed bottom-4 left-4 right-4 bg-white p-4 rounded-lg shadow-lg border border-slate-200 z-50 flex flex-col;
+  }
+}
+
+/* Bottom navigation for mobile */
+.bottom-nav {
+  @apply fixed bottom-0 left-0 right-0 bg-white flex items-center justify-around h-16 border-t border-slate-200 z-10;
+}
+
+.bottom-nav-item {
+  @apply flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-600;
+}
+
+.bottom-nav-item.active {
+  @apply text-blue-600;
+}
+
+/* Hide scrollbar for mobile */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Pull to refresh indicator */
+.pull-to-refresh {
+  @apply flex items-center justify-center h-10 w-full absolute top-0 left-0 right-0 transform -translate-y-full z-10;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Handle notch on iPhone X and newer */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
