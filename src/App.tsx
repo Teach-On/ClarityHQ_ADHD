@@ -6,10 +6,7 @@ import { supabase, testSupabaseConnection, checkSupabaseEnv } from './lib/supaba
 import { useUserStore } from './stores/userStore';
 import LoadingScreen from './components/common/LoadingScreen';
 
-// Lazy load components with heavier dependencies
 const GoalCompleteConfetti = lazy(() => import('./components/common/GoalCompleteConfetti'));
-
-// Lazy load all pages for better code splitting
 const Login = lazy(() => import('./pages/Login'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -17,28 +14,21 @@ const Focus = lazy(() => import('./pages/Focus'));
 const Settings = lazy(() => import('./pages/Settings'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 
-// Fallback loading component
 const PageLoader = () => (
   <div className="flex h-screen w-full items-center justify-center">
     <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
   </div>
 );
 
-// Utility function to validate UUID format - simplified version to prevent validation errors
 const isValidUUID = (uuid: string): boolean => {
-  // In development mode, be more permissive
-  if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
-    return true;
-  }
-  
-  // In production, use strict validation
+  if (import.meta.env.DEV || import.meta.env.MODE === 'development') return true;
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
 };
 
 function App() {
   const navigate = useNavigate();
-  const { user, setUser, preferences, setPreferences, isAuthenticated, isLoading, setIsLoading, resetState } = useUserStore();
+  const { setUser, setPreferences, isAuthenticated, isLoading, setIsLoading, resetState } = useUserStore();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
@@ -49,8 +39,7 @@ function App() {
     async function initializeAuth() {
       console.log('App: Initializing auth...');
       setIsLoading(true);
-      
-      // Check environment variables before attempting connection
+
       const envCheck = checkSupabaseEnv();
       if (!envCheck.isValid) {
         console.error('App:', envCheck.message);
@@ -59,8 +48,7 @@ function App() {
         setIsLoading(false);
         return;
       }
-      
-      // First test the Supabase connection
+
       try {
         const isConnected = await testSupabaseConnection();
         if (!isConnected) {
@@ -70,33 +58,26 @@ function App() {
           setIsLoading(false);
           return;
         }
-      } catch (error) {
-        console.error('Error testing Supabase connection:', error);
-        setConnectionError(true);
-        setConnectionErrorDetails(`Network error when connecting to Supabase: ${error.message || 'Unknown error'}`);
-        setIsLoading(false);
-        return;
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          setConnectionErrorDetails(`Network error when connecting to Supabase: ${error.message}`);
+        } else {
+          setConnectionErrorDetails('Network error when connecting to Supabase: Unknown error');
+        }
       }
-      
-      // Set a timeout to prevent infinite loading
+
       const timeoutId = setTimeout(() => {
         console.log('App: Loading timeout reached');
         setLoadingTimeout(true);
-      }, 10000); // 10 seconds timeout
-      
+      }, 10000);
+
       try {
-        // Get initial session
         const { data: initialSession } = await supabase.auth.getSession();
-        
-        // If we have a session initially, set the user
         if (initialSession?.session?.user) {
           console.log('App: Initial session found');
-          
-          // In development, we want to be more permissive with UUID validation
           if (!isValidUUID(initialSession.session.user.id)) {
             console.warn('App: User ID is not a valid UUID format, but continuing in development mode.');
           }
-          
           setUser(initialSession.session.user);
         } else {
           console.log('App: No initial session found');
@@ -105,12 +86,11 @@ function App() {
           setIsLoading(false);
           return;
         }
-        
-        // Subscribe to auth changes
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
             console.log('App: Auth state changed:', event);
-            
+
             if (event === 'SIGNED_OUT') {
               console.log('App: User signed out');
               resetState();
@@ -118,18 +98,14 @@ function App() {
               clearTimeout(timeoutId);
               return;
             }
-            
+
             if (session?.user) {
               console.log('App: Setting user from session');
-              
-              // In development, we want to be more permissive with UUID validation
               if (!isValidUUID(session.user.id)) {
                 console.warn('App: User ID from session is not a valid UUID format, but continuing in development mode.');
               }
-              
               setUser(session.user);
-              
-              // Fetch user preferences
+
               try {
                 console.log('App: Fetching user preferences');
                 const { data: userPreferences, error } = await supabase
@@ -137,12 +113,11 @@ function App() {
                   .select('*')
                   .eq('user_id', session.user.id)
                   .maybeSingle();
-                
+
                 if (error) {
                   console.error('App: Error fetching user preferences:', error);
-                  // Continue even if preferences fetch fails
                 }
-                
+
                 if (userPreferences) {
                   console.log('App: User preferences found');
                   setPreferences(userPreferences);
@@ -152,52 +127,52 @@ function App() {
                   setPreferences(null);
                   setHasCompletedOnboarding(false);
                 }
-              } catch (error) {
-                console.error('App: Error in preferences fetch try/catch:', error);
-                // Continue even if preferences fetch fails
+              } catch (error: unknown) {
+                if (error instanceof Error) {
+                  console.error('App: Error in preferences fetch try/catch:', error.message);
+                } else {
+                  console.error('App: Unknown error in preferences fetch');
+                }
                 setHasCompletedOnboarding(false);
               }
             } else {
               console.log('App: No user in session, resetting state');
               resetState();
             }
-            
+
             console.log('App: Auth initialization completed');
             setIsLoading(false);
             clearTimeout(timeoutId);
           }
         );
-        
+
         return () => {
           console.log('App: Cleaning up auth subscription');
           subscription.unsubscribe();
           clearTimeout(timeoutId);
         };
-      } catch (error) {
-        console.error('App: Error in auth initialization:', error);
-        setConnectionErrorDetails(`Authentication error: ${error.message || 'Unknown error'}`);
-        setConnectionError(true);
-        setIsLoading(false);
-        clearTimeout(timeoutId);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          setConnectionErrorDetails(`Authentication error: ${error.message}`);
+        } else {
+          setConnectionErrorDetails('Authentication error: Unknown error');
+        }
       }
     }
-    
+
     initializeAuth();
-  }, [retryCount, setUser, setPreferences, setIsLoading, resetState]);
-  
+  }, [retryCount, setUser, setPreferences, setIsLoading, resetState, navigate]);
+
   const handleReset = () => {
     console.log('App: Performing hard reset');
-    // Clear all auth data and state
     clearAuthStorage();
     resetState();
     setLoadingTimeout(false);
     setConnectionError(false);
     setConnectionErrorDetails('');
-    
-    // Redirect to landing page
     navigate('/');
   };
-  
+
   const handleRetry = () => {
     console.log('App: Retrying connection');
     setLoadingTimeout(false);
@@ -205,8 +180,7 @@ function App() {
     setConnectionErrorDetails('');
     setRetryCount(prev => prev + 1);
   };
-  
-  // Import clearAuthStorage only when needed to avoid circular dependencies
+
   const clearAuthStorage = () => {
     import('./services/auth').then(({ clearAuthStorage }) => {
       clearAuthStorage();
@@ -214,8 +188,7 @@ function App() {
       console.error('Failed to import clearAuthStorage:', err);
     });
   };
-  
-  // If loading takes too long, provide an escape route
+
   if (isLoading) {
     return (
       <div>
@@ -254,12 +227,18 @@ function App() {
         <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" replace />} />
         <Route path="/onboarding" element={
           isAuthenticated && hasCompletedOnboarding === false 
-            ? <Onboarding /> 
+            ? <Onboarding 
+                theme="light"
+                habitReminders={true}
+                showTasks={true}
+                showHabits={true}
+                showCalendar={true}
+              />
             : <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
         } />
         <Route path="/" element={
           isAuthenticated 
-            ? (hasCompletedOnboarding === false ? <Navigate to="/onboarding\" replace /> : <Layout />)
+            ? (hasCompletedOnboarding === false ? <Navigate to="/onboarding" replace /> : <Layout />)
             : <Navigate to="/login" replace />
         }>
           <Route index element={<Navigate to="/dashboard" replace />} />
