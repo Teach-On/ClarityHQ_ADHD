@@ -36,7 +36,7 @@ const Dashboard = () => {
             <p className="text-slate-600 dark:text-slate-400 text-sm">
               Let’s stay focused and make progress today.
             </p>
-          </div>
+          </div>text-slate-600
           <button
             onClick={toggleDarkMode}
             className="btn btn-outline text-sm flex items-center gap-2"
