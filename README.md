@@ -94,6 +94,7 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 
 ## 🧪 Development Notes
 
+- Run `npm install` before executing `npm run lint` or `npm run build` to ensure all dev dependencies like `@eslint/js` and `vite` are available
 - Run `npm run build` for a production-ready output
 - Prompts can be edited in `.bolt/prompt/*.prompt` and tested with Bolt when tokens are available
 - Uses Tailwind for responsive styling and Framer Motion for smooth UI interactions

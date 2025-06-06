@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "analyze": "vite build --mode analyze",
-    "dev:server": "ts-node --project tsconfig.server.json server/index.ts"
+"check": "node scripts/check-setup.cjs",
+"dev:server": "ts-node --project tsconfig.server.json server/index.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^2.5.1",
