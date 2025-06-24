@@ -10,8 +10,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase credentials. Please check your .env file and ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set correctly.');
 }
 
+// Auto-fix common URL format issues
+const fixSupabaseUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // Remove any trailing slashes
+  url = url.replace(/\/+$/, '');
+  
+  // Add https:// if missing
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  
+  return url;
+};
+
+const correctedUrl = fixSupabaseUrl(supabaseUrl || '');
+
 export const supabase = createClient<Database>(
-  supabaseUrl || '',  // Provide fallbacks to prevent null errors
+  correctedUrl,
   supabaseAnonKey || '', 
   {
     auth: {
@@ -73,19 +90,27 @@ export const debugRLS = async () => {
 export const testSupabaseConnection = async (): Promise<boolean> => {
   try {
     console.log('Testing Supabase connection...');
+    console.log('Using URL:', correctedUrl);
     
     // First check if we have valid URL and key
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!correctedUrl || !supabaseAnonKey) {
       console.error('Cannot connect to Supabase: Missing URL or anonymous key in environment variables');
+      console.error('VITE_SUPABASE_URL:', correctedUrl || 'missing');
+      console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'present' : 'missing');
       return false;
     }
     
     // Validate URL format
     try {
-      new URL(supabaseUrl);
+      const urlObj = new URL(correctedUrl);
+      if (!urlObj.hostname.includes('supabase.co')) {
+        console.error('URL does not appear to be a valid Supabase URL:', correctedUrl);
+        return false;
+      }
     } catch (urlError) {
       console.error('Invalid Supabase URL format:', urlError);
-      console.error('VITE_SUPABASE_URL must be a complete URL (e.g., https://your-project.supabase.co)');
+      console.error('Expected format: https://your-project-id.supabase.co');
+      console.error('Received:', correctedUrl);
       return false;
     }
     
@@ -104,6 +129,17 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       
       if (healthCheckError) {
         console.error('Supabase connection test failed with error:', healthCheckError);
+        
+        // Check for specific error types
+        if (healthCheckError.message.includes('Failed to fetch')) {
+          console.error('Network error: Unable to reach Supabase server');
+          console.error('This could be due to:');
+          console.error('1. Incorrect Supabase URL (missing https://)');
+          console.error('2. Network connectivity issues');
+          console.error('3. Supabase project is paused or disabled');
+          console.error('4. Firewall blocking the connection');
+        }
+        
         return false;
       }
       
@@ -126,7 +162,8 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
         console.error('Connection refused - verify your Supabase URL is correct and the service is running');
       } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Failed to fetch')) {
         console.error('Network error or CORS issue - check your Supabase URL format and network connection');
-        console.error('If testing locally, ensure your .env file has the correct values and your network is connected');
+        console.error('If the URL is missing https://, this will cause a "refused to connect" error');
+        console.error('Make sure your .env file has: VITE_SUPABASE_URL=https://your-project.supabase.co');
       }
       
       console.log('Error details:', fetchError);
@@ -206,13 +243,22 @@ export const checkSupabaseEnv = (): { isValid: boolean; message: string } => {
   }
   
   // Check for malformed URL
+  const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+  const fixedUrl = fixSupabaseUrl(rawUrl);
+  
   try {
-    new URL(import.meta.env.VITE_SUPABASE_URL);
+    new URL(fixedUrl);
   } catch (e) {
     return {
       isValid: false,
-      message: 'Invalid VITE_SUPABASE_URL format. It should be a complete URL (e.g., https://your-project.supabase.co)'
+      message: `Invalid VITE_SUPABASE_URL format. Expected: https://your-project.supabase.co, got: ${rawUrl}`
     };
+  }
+  
+  // Check if URL was auto-corrected
+  if (rawUrl !== fixedUrl) {
+    console.warn(`Auto-corrected Supabase URL from "${rawUrl}" to "${fixedUrl}"`);
+    console.warn('Please update your .env file to use the correct format: https://your-project.supabase.co');
   }
   
   return { isValid: true, message: 'Supabase environment variables are valid' };
