@@ -132,20 +132,20 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       if (!directResponse.ok) {
         console.error('❌ Direct URL access failed with status:', directResponse.status);
         if (directResponse.status === 404) {
-          console.error('💡 This might indicate:');
-          console.error('   1. The Supabase project does not exist');
-          console.error('   2. The project URL is incorrect');
-          console.error('   3. The project has been deleted');
+          console.warn('💡 This might indicate:');
+          console.warn('   1. The Supabase project does not exist');
+          console.warn('   2. The project URL is incorrect');
+          console.warn('   3. The project has been deleted');
         }
         return false;
       }
     } catch (directError) {
       console.error('❌ Direct URL test failed:', directError);
-      console.error('💡 This might indicate:');
-      console.error('   1. Network connectivity issues');
-      console.error('   2. Firewall blocking the connection');
-      console.error('   3. Supabase project is paused or disabled');
-      console.error('   4. DNS resolution issues');
+      console.warn('💡 This might indicate:');
+      console.warn('   1. Network connectivity issues');
+      console.warn('   2. Firewall blocking the connection');
+      console.warn('   3. Supabase project is paused or disabled');
+      console.warn('   4. DNS resolution issues');
       return false;
     }
     
@@ -170,9 +170,9 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       if (!apiResponse.ok) {
         console.error('❌ API endpoint failed with status:', apiResponse.status);
         if (apiResponse.status === 401) {
-          console.error('💡 This indicates an invalid or expired API key');
+          console.warn('💡 This indicates an invalid or expired API key');
         } else if (apiResponse.status === 403) {
-          console.error('💡 This indicates insufficient permissions or project issues');
+          console.warn('💡 This indicates insufficient permissions or project issues');
         }
         return false;
       }
@@ -183,9 +183,9 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       console.error('❌ Supabase API test failed:', apiError);
       
       if (apiError.name === 'AbortError') {
-        console.error('💡 Connection timed out - check your network and Supabase project status');
+        console.warn('💡 Connection timed out - check your network and Supabase project status');
       } else {
-        console.error('💡 API connection failed - check your API key and project status');
+        console.warn('💡 API connection failed - check your API key and project status');
       }
       return false;
     }
@@ -199,10 +199,10 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       
       if (healthCheckError) {
         console.error('❌ Database query failed:', healthCheckError);
-        console.error('💡 This might indicate:');
-        console.error('   1. Database tables are not set up');
-        console.error('   2. RLS policies are too restrictive');
-        console.error('   3. API key lacks necessary permissions');
+        console.warn('💡 This might indicate:');
+        console.warn('   1. Database tables are not set up');
+        console.warn('   2. RLS policies are too restrictive');
+        console.warn('   3. API key lacks necessary permissions');
         return false;
       }
       
@@ -224,11 +224,11 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
     
   } catch (error) {
     console.error('💥 Supabase connection test failed with exception:', error);
-    console.error('💡 Please check:');
-    console.error('   1. Your internet connection');
-    console.error('   2. Supabase project status in dashboard');
-    console.error('   3. .env file configuration');
-    console.error('   4. Firewall/proxy settings');
+    console.warn('💡 Please check:');
+    console.warn('   1. Your internet connection');
+    console.warn('   2. Supabase project status in dashboard');
+    console.warn('   3. .env file configuration');
+    console.warn('   4. Firewall/proxy settings');
     return false;
   }
 };
