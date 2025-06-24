@@ -109,9 +109,9 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       const urlObj = new URL(correctedUrl);
       console.log('🌐 URL validation passed:', urlObj.href);
       if (!urlObj.hostname.includes('supabase.co')) {
-        console.error('⚠️ URL does not appear to be a valid Supabase URL:', correctedUrl);
+        console.warn('⚠️ URL does not appear to be a valid Supabase URL:', correctedUrl);
         console.log('💡 Expected format: https://your-project-id.supabase.co');
-        return false;
+        // Don't return false here, continue with connection test
       }
     } catch (urlError) {
       console.error('❌ Invalid Supabase URL format:', urlError);
@@ -120,115 +120,89 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
       return false;
     }
     
-    // Test direct URL accessibility
-    console.log('🌍 Testing direct URL access...');
-    try {
-      const directResponse = await fetch(correctedUrl, { 
-        method: 'HEAD',
-        signal: AbortSignal.timeout(10000)
-      });
-      console.log('📡 Direct URL response status:', directResponse.status);
-      
-      if (!directResponse.ok) {
-        console.error('❌ Direct URL access failed with status:', directResponse.status);
-        if (directResponse.status === 404) {
-          console.warn('💡 This might indicate:');
-          console.warn('   1. The Supabase project does not exist');
-          console.warn('   2. The project URL is incorrect');
-          console.warn('   3. The project has been deleted');
-        }
-        return false;
-      }
-    } catch (directError) {
-      console.error('❌ Direct URL test failed:', directError);
-      console.warn('💡 This might indicate:');
-      console.warn('   1. Network connectivity issues');
-      console.warn('   2. Firewall blocking the connection');
-      console.warn('   3. Supabase project is paused or disabled');
-      console.warn('   4. DNS resolution issues');
-      return false;
-    }
-    
-    // Test Supabase API endpoint
+    // Test Supabase API endpoint directly (skip the HEAD request to avoid CORS issues)
     console.log('🔌 Testing Supabase API endpoint...');
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced timeout to 8 seconds
       
-      // Test the REST API endpoint
-      const apiResponse = await fetch(`${correctedUrl}/rest/v1/`, {
-        headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`
-        },
-        signal: controller.signal
-      });
+      // Test the REST API endpoint with a simple query
+      const { error: healthCheckError } = await supabase
+        .from('user_preferences')
+        .select('count')
+        .limit(1)
+        .abortSignal(controller.signal);
       
       clearTimeout(timeoutId);
-      console.log('📊 API endpoint response status:', apiResponse.status);
-      
-      if (!apiResponse.ok) {
-        console.error('❌ API endpoint failed with status:', apiResponse.status);
-        if (apiResponse.status === 401) {
-          console.warn('💡 This indicates an invalid or expired API key');
-        } else if (apiResponse.status === 403) {
-          console.warn('💡 This indicates insufficient permissions or project issues');
-        }
-        return false;
-      }
-      
-      console.log('✅ Supabase API endpoint is accessible');
-      
-    } catch (apiError) {
-      console.error('❌ Supabase API test failed:', apiError);
-      
-      if (apiError.name === 'AbortError') {
-        console.warn('💡 Connection timed out - check your network and Supabase project status');
-      } else {
-        console.warn('💡 API connection failed - check your API key and project status');
-      }
-      return false;
-    }
-    
-    // Test a simple query
-    console.log('📝 Testing database query...');
-    try {
-      const { error: healthCheckError } = await supabase.from('user_preferences')
-        .select('count')
-        .limit(1);
       
       if (healthCheckError) {
-        console.error('❌ Database query failed:', healthCheckError);
-        console.warn('💡 This might indicate:');
-        console.warn('   1. Database tables are not set up');
-        console.warn('   2. RLS policies are too restrictive');
-        console.warn('   3. API key lacks necessary permissions');
+        console.warn('⚠️ Database query returned error (this may be normal for logged out users):', healthCheckError);
+        // Don't fail the connection test for RLS errors when user is not authenticated
+        if (healthCheckError.code === 'PGRST116' || healthCheckError.message?.includes('RLS')) {
+          console.log('✅ Connection successful (RLS preventing query is expected when not authenticated)');
+          return true;
+        }
+        console.error('❌ Database connection failed:', healthCheckError);
         return false;
       }
       
       console.log('✅ Database query successful');
       
-    } catch (queryError) {
-      console.error('❌ Database query test failed:', queryError);
-      return false;
+    } catch (apiError: any) {
+      console.error('❌ Supabase API test failed:', apiError);
+      
+      if (apiError.name === 'AbortError') {
+        console.warn('💡 Connection timed out - check your network and Supabase project status');
+        return false;
+      } else if (apiError.message?.includes('Failed to fetch')) {
+        console.warn('💡 Network error - this might be a temporary issue');
+        console.warn('   Possible causes:');
+        console.warn('   1. Network connectivity issues');
+        console.warn('   2. Supabase project is paused');
+        console.warn('   3. Firewall blocking the connection');
+        console.warn('   4. CORS configuration issues');
+        return false;
+      } else {
+        console.warn('💡 API connection failed - check your API key and project status');
+        return false;
+      }
     }
     
-    // Final verification
-    const { data: sessionData } = await supabase.auth.getSession();
-    const hasValidSession = !!sessionData.session;
+    // Final verification - check if we can get session (this won't fail even if no user is logged in)
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.warn('⚠️ Session check warning:', sessionError);
+        // Don't fail the connection test for session errors
+      } else {
+        const hasValidSession = !!sessionData.session;
+        console.log('🔐 Session check result:', hasValidSession ? 'Valid session found' : 'No valid session (normal for logged out users)');
+      }
+    } catch (sessionError) {
+      console.warn('⚠️ Session check failed:', sessionError);
+      // Don't fail the connection test for session errors
+    }
     
-    console.log('🔐 Session check result:', hasValidSession ? 'Valid session found' : 'No valid session (normal for logged out users)');
     console.log('✅ Supabase connection test PASSED');
-    
     return true;
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('💥 Supabase connection test failed with exception:', error);
-    console.warn('💡 Please check:');
-    console.warn('   1. Your internet connection');
-    console.warn('   2. Supabase project status in dashboard');
-    console.warn('   3. .env file configuration');
-    console.warn('   4. Firewall/proxy settings');
+    
+    // Provide more specific error guidance
+    if (error.message?.includes('Failed to fetch')) {
+      console.warn('💡 Network fetch error detected. This usually indicates:');
+      console.warn('   1. The Supabase project is paused or deleted');
+      console.warn('   2. Network connectivity issues');
+      console.warn('   3. Firewall/proxy blocking the connection');
+    } else {
+      console.warn('💡 Please check:');
+      console.warn('   1. Your internet connection');
+      console.warn('   2. Supabase project status in dashboard');
+      console.warn('   3. .env file configuration');
+      console.warn('   4. Firewall/proxy settings');
+    }
+    
     return false;
   }
 };
@@ -275,7 +249,7 @@ export const debugSupabaseSession = async () => {
         hasMetadata: !!data.session.user.user_metadata
       } : null
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error('Exception getting session:', err);
     return { 
       hasSession: false, 

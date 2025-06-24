@@ -49,30 +49,41 @@ function App() {
         return;
       }
 
+      // Test connection but don't fail the app if it fails
+      // The Supabase client might still work for auth operations
       try {
         const isConnected = await testSupabaseConnection();
         if (!isConnected) {
-          console.error('Failed to connect to Supabase');
-          setConnectionError(true);
-          setConnectionErrorDetails('Unable to connect to Supabase. Check your credentials and network connection.');
-          setIsLoading(false);
-          return;
+          console.warn('Initial connection test failed, but continuing with auth initialization...');
+          console.warn('The Supabase client may still work for authentication.');
+          // Don't set connectionError here - continue with auth flow
+        } else {
+          console.log('✅ Supabase connection test passed');
         }
       } catch (error: unknown) {
-        if (error instanceof Error) {
-          setConnectionErrorDetails(`Network error when connecting to Supabase: ${error.message}`);
-        } else {
-          setConnectionErrorDetails('Network error when connecting to Supabase: Unknown error');
-        }
+        console.warn('Connection test threw an error, but continuing with auth initialization:', error);
+        // Don't fail the app here - the actual auth operations might still work
       }
 
       const timeoutId = setTimeout(() => {
         console.log('App: Loading timeout reached');
         setLoadingTimeout(true);
-      }, 10000);
+      }, 15000); // Increased timeout to 15 seconds
 
       try {
-        const { data: initialSession } = await supabase.auth.getSession();
+        // Try to get initial session
+        console.log('App: Getting initial session...');
+        const { data: initialSession, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('App: Error getting initial session:', sessionError);
+          setConnectionError(true);
+          setConnectionErrorDetails(`Authentication error: ${sessionError.message}`);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+        
         if (initialSession?.session?.user) {
           console.log('App: Initial session found');
           if (!isValidUUID(initialSession.session.user.id)) {
@@ -116,6 +127,8 @@ function App() {
 
                 if (error) {
                   console.error('App: Error fetching user preferences:', error);
+                  // Don't fail the app for preference errors - user can still use basic functionality
+                  setHasCompletedOnboarding(false);
                 }
 
                 if (userPreferences) {
@@ -152,11 +165,19 @@ function App() {
           clearTimeout(timeoutId);
         };
       } catch (error: unknown) {
+        console.error('App: Error in auth initialization:', error);
         if (error instanceof Error) {
-          setConnectionErrorDetails(`Authentication error: ${error.message}`);
+          if (error.message.includes('Failed to fetch')) {
+            setConnectionErrorDetails('Network error: Unable to connect to Supabase. Please check your internet connection and try again.');
+          } else {
+            setConnectionErrorDetails(`Authentication error: ${error.message}`);
+          }
         } else {
-          setConnectionErrorDetails('Authentication error: Unknown error');
+          setConnectionErrorDetails('Authentication error: Unknown error occurred');
         }
+        setConnectionError(true);
+        setIsLoading(false);
+        clearTimeout(timeoutId);
       }
     }
 
