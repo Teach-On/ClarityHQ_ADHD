@@ -89,12 +89,16 @@ export const debugRLS = async () => {
 // Helper function to check if Supabase connection is working
 export const testSupabaseConnection = async (): Promise<boolean> => {
   try {
-    console.log('Testing Supabase connection...');
-    console.log('Using URL:', correctedUrl);
+    console.log('🔍 Testing Supabase connection...');
+    console.log('📍 Environment check:');
+    console.log('  - URL from env:', import.meta.env.VITE_SUPABASE_URL);
+    console.log('  - URL corrected:', correctedUrl);
+    console.log('  - Key exists:', !!supabaseAnonKey);
+    console.log('  - Key preview:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'missing');
     
     // First check if we have valid URL and key
     if (!correctedUrl || !supabaseAnonKey) {
-      console.error('Cannot connect to Supabase: Missing URL or anonymous key in environment variables');
+      console.error('❌ Cannot connect to Supabase: Missing URL or anonymous key in environment variables');
       console.error('VITE_SUPABASE_URL:', correctedUrl || 'missing');
       console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'present' : 'missing');
       return false;
@@ -103,74 +107,128 @@ export const testSupabaseConnection = async (): Promise<boolean> => {
     // Validate URL format
     try {
       const urlObj = new URL(correctedUrl);
+      console.log('🌐 URL validation passed:', urlObj.href);
       if (!urlObj.hostname.includes('supabase.co')) {
-        console.error('URL does not appear to be a valid Supabase URL:', correctedUrl);
+        console.error('⚠️ URL does not appear to be a valid Supabase URL:', correctedUrl);
+        console.log('💡 Expected format: https://your-project-id.supabase.co');
         return false;
       }
     } catch (urlError) {
-      console.error('Invalid Supabase URL format:', urlError);
+      console.error('❌ Invalid Supabase URL format:', urlError);
       console.error('Expected format: https://your-project-id.supabase.co');
       console.error('Received:', correctedUrl);
       return false;
     }
     
+    // Test direct URL accessibility
+    console.log('🌍 Testing direct URL access...');
     try {
-      // Test connection with a timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const directResponse = await fetch(correctedUrl, { 
+        method: 'HEAD',
+        signal: AbortSignal.timeout(10000)
+      });
+      console.log('📡 Direct URL response status:', directResponse.status);
       
-      // Basic connection test (doesn't require authentication)
-      const { error: healthCheckError } = await supabase.from('user_preferences')
-        .select('count')
-        .limit(1)
-        .abortSignal(controller.signal);
+      if (!directResponse.ok) {
+        console.error('❌ Direct URL access failed with status:', directResponse.status);
+        if (directResponse.status === 404) {
+          console.error('💡 This might indicate:');
+          console.error('   1. The Supabase project does not exist');
+          console.error('   2. The project URL is incorrect');
+          console.error('   3. The project has been deleted');
+        }
+        return false;
+      }
+    } catch (directError) {
+      console.error('❌ Direct URL test failed:', directError);
+      console.error('💡 This might indicate:');
+      console.error('   1. Network connectivity issues');
+      console.error('   2. Firewall blocking the connection');
+      console.error('   3. Supabase project is paused or disabled');
+      console.error('   4. DNS resolution issues');
+      return false;
+    }
+    
+    // Test Supabase API endpoint
+    console.log('🔌 Testing Supabase API endpoint...');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      // Test the REST API endpoint
+      const apiResponse = await fetch(`${correctedUrl}/rest/v1/`, {
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        signal: controller.signal
+      });
       
       clearTimeout(timeoutId);
+      console.log('📊 API endpoint response status:', apiResponse.status);
       
-      if (healthCheckError) {
-        console.error('Supabase connection test failed with error:', healthCheckError);
-        
-        // Check for specific error types
-        if (healthCheckError.message.includes('Failed to fetch')) {
-          console.error('Network error: Unable to reach Supabase server');
-          console.error('This could be due to:');
-          console.error('1. Incorrect Supabase URL (missing https://)');
-          console.error('2. Network connectivity issues');
-          console.error('3. Supabase project is paused or disabled');
-          console.error('4. Firewall blocking the connection');
+      if (!apiResponse.ok) {
+        console.error('❌ API endpoint failed with status:', apiResponse.status);
+        if (apiResponse.status === 401) {
+          console.error('💡 This indicates an invalid or expired API key');
+        } else if (apiResponse.status === 403) {
+          console.error('💡 This indicates insufficient permissions or project issues');
         }
-        
         return false;
       }
       
-      // If health check passes, verify session if available
-      const { data: sessionData } = await supabase.auth.getSession();
-      const hasValidSession = !!sessionData.session;
+      console.log('✅ Supabase API endpoint is accessible');
       
-      console.log('Session check result:', hasValidSession ? 'Valid session found' : 'No valid session');
+    } catch (apiError) {
+      console.error('❌ Supabase API test failed:', apiError);
       
-      console.log('Supabase connection test successful');
-      return true;
-    } catch (fetchError) {
-      // Handle fetch-specific errors more gracefully
-      console.error('Supabase connection test failed: Network error');
-      
-      // Log more detailed error information for debugging
-      if (fetchError.name === 'AbortError') {
-        console.error('Connection timed out - check your network and Supabase URL');
-      } else if (fetchError.cause && fetchError.cause.code === 'ECONNREFUSED') {
-        console.error('Connection refused - verify your Supabase URL is correct and the service is running');
-      } else if (fetchError.name === 'TypeError' && fetchError.message.includes('Failed to fetch')) {
-        console.error('Network error or CORS issue - check your Supabase URL format and network connection');
-        console.error('If the URL is missing https://, this will cause a "refused to connect" error');
-        console.error('Make sure your .env file has: VITE_SUPABASE_URL=https://your-project.supabase.co');
+      if (apiError.name === 'AbortError') {
+        console.error('💡 Connection timed out - check your network and Supabase project status');
+      } else {
+        console.error('💡 API connection failed - check your API key and project status');
       }
-      
-      console.log('Error details:', fetchError);
       return false;
     }
-  } catch (err) {
-    console.error('Supabase connection test failed with exception:', err);
+    
+    // Test a simple query
+    console.log('📝 Testing database query...');
+    try {
+      const { error: healthCheckError } = await supabase.from('user_preferences')
+        .select('count')
+        .limit(1);
+      
+      if (healthCheckError) {
+        console.error('❌ Database query failed:', healthCheckError);
+        console.error('💡 This might indicate:');
+        console.error('   1. Database tables are not set up');
+        console.error('   2. RLS policies are too restrictive');
+        console.error('   3. API key lacks necessary permissions');
+        return false;
+      }
+      
+      console.log('✅ Database query successful');
+      
+    } catch (queryError) {
+      console.error('❌ Database query test failed:', queryError);
+      return false;
+    }
+    
+    // Final verification
+    const { data: sessionData } = await supabase.auth.getSession();
+    const hasValidSession = !!sessionData.session;
+    
+    console.log('🔐 Session check result:', hasValidSession ? 'Valid session found' : 'No valid session (normal for logged out users)');
+    console.log('✅ Supabase connection test PASSED');
+    
+    return true;
+    
+  } catch (error) {
+    console.error('💥 Supabase connection test failed with exception:', error);
+    console.error('💡 Please check:');
+    console.error('   1. Your internet connection');
+    console.error('   2. Supabase project status in dashboard');
+    console.error('   3. .env file configuration');
+    console.error('   4. Firewall/proxy settings');
     return false;
   }
 };
